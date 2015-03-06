@@ -25,8 +25,8 @@ public class RouterNode {
     // Send nodes dist-vector to neighbors.
     for( int nodeID = 0 ; nodeID < RouterSimulator.NUM_NODES; ++nodeID ){
 	if( myID != nodeID ){
-	    RouterPacket newPkt = new RouterPacket(this.myID, nodeID, this.costs[nodeID]);
-	    sendUpdate(newPkt);
+	    RouterPacket newPkt = new RouterPacket(this.myID, nodeID, this.costs[myID]);
+	    sendUpdate(newPkt); 
 	}
     }
     
@@ -34,21 +34,31 @@ public class RouterNode {
 
   // Called by the simulator (executed) when a node receives an update from one of its neighbors
   public void recvUpdate(RouterPacket pkt) {
+
+      if(pkt.destid != this.myID){
+	  return;
+      }
+
       System.arraycopy(pkt.mincost, 0, costs[pkt.sourceid], 0, RouterSimulator.NUM_NODES);
       
-      for( int curNode = 0; curNode < RouterSimulator.NUM_NODES; curNode++){
-	  if(curNode == myID){
-	      costs[myID][curNode] = 0;
+      for( int myIndex = 0; myIndex < RouterSimulator.NUM_NODES; myIndex++){
+	  if(myIndex == myID){
+	      continue;
 	  }
 	  else{
-	      int min = 0;
-	      for( int i = 0; i < RouterSimulator.NUM_NODES; i++ ){
-		  if( i == myID){
-		      continue;
+	      for( int i = 0; i < RouterSimulator.NUM_NODES; i++ ){ // One Node (not this node)
+		  if(i == myID) continue;
+		  for( int j = 0; j < RouterSimulator.NUM_NODES; j++ ){ // Another node (not this node)
+		      if( j == i || i == myID ){ continue; }
+
+		      int mini = Math.min( this.costs[i][myID]/*Node to this node*/ + this.costs[i][myIndex]/*Node to target node*/,
+					  this.costs[j][myID]/*Node to this node*/ + this.costs[j][myIndex]/*Node to target node*/ );
+
+		      if(mini < costs[myID][myIndex]){
+			  costs[myID][myIndex] = mini;
+		      }
 		  }
-		  min = Math.min(costs[curNode][i] + costs[curNode][curNode], );
 	      }
-	      costs[myID][curNode] = min;
 	  }
       }
   }
@@ -56,6 +66,7 @@ public class RouterNode {
 
   //--------------------------------------------------
   private void sendUpdate(RouterPacket pkt) {
+      // Send yourself as infinity
     sim.toLayer2(pkt);
   }
   
@@ -66,11 +77,17 @@ public class RouterNode {
   public void printDistanceTable() {
 	  myGUI.println("Current table for " + myID +
 			"  at time " + sim.getClocktime());
+	  
+	  myGUI.print(String.format("%-2s", ""));
+	  for(int xtitle = 0; xtitle < RouterSimulator.NUM_NODES; ++xtitle){
+	      myGUI.print( String.format( "%4s", (char)(xtitle+65) ) );
+	  }
+	  myGUI.println();
 
-	  myGUI.println("---------------------------------");
 	  for(int col = 0; col < RouterSimulator.NUM_NODES; col++){
+	      myGUI.print( String.format( "%1s", (char)(col+65) ) );
 	      for(int row = 0; row < RouterSimulator.NUM_NODES; row++){
-		  myGUI.print("  " + this.costs[col][row]);
+		  myGUI.print( String.format( "%4s", this.costs[col][row] ) );
 	      }
 	      myGUI.println();
 	  }
