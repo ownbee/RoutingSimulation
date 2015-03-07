@@ -1,11 +1,12 @@
 import javax.swing.*;        
 
 public class RouterNode {
-  private int myID;
-  private GuiTextArea myGUI;
-  private RouterSimulator sim;
-  private int[][] costs = new int[RouterSimulator.NUM_NODES][RouterSimulator.NUM_NODES];
-    private int[] myCost = new int[RouterSimulator.NUM_NODES];
+    private int myID;
+    private GuiTextArea myGUI;
+    private RouterSimulator sim;
+    private int[][] costs = new int[RouterSimulator.NUM_NODES][RouterSimulator.NUM_NODES];
+    private int[] myNbr = new int[RouterSimulator.NUM_NODES];
+    private int[] myRoutings = new int[RouterSimulator.NUM_NODES];
 
   //--------------------------------------------------
   public RouterNode(int ID, RouterSimulator sim, int[] costs) {
@@ -21,8 +22,12 @@ public class RouterNode {
     }
 
     // Copy start costs for node to our table
-    System.arraycopy(costs, 0, this.myCost, 0, RouterSimulator.NUM_NODES);
+    System.arraycopy(costs, 0, this.myNbr, 0, RouterSimulator.NUM_NODES);
     System.arraycopy(costs, 0, this.costs[myID], 0, RouterSimulator.NUM_NODES);
+    
+    for( int i = 0; i < RouterSimulator.NUM_NODES; i++){
+	myRoutings[i] = i;
+    }
 
     sendAllUpdate();
     
@@ -30,34 +35,36 @@ public class RouterNode {
 
     public boolean updateCosts(){
 	boolean costChange = false;
-	for( int myIndex = 0; myIndex < RouterSimulator.NUM_NODES; myIndex++){
-	    if(myIndex == myID){
+	for( int target = 0; target < RouterSimulator.NUM_NODES; target++){
+	    if(target == myID)
 		continue;
-	    }
-	    else{
-		for( int i = 0; i < RouterSimulator.NUM_NODES; i++ ){ // One Node (not this node)
-		    if(i == myID) continue;
-		    for( int j = 0; j < RouterSimulator.NUM_NODES; j++ ){ // Another node (not this node)
-			if( j == i || j == myID ){ continue; }
 
-			int mini = Math.min( this.costs[i][myID]/*Node to this node*/ + this.costs[i][myIndex]/*Node to target node*/,
-					     this.costs[j][myID]/*Node to this node*/ + this.costs[j][myIndex]/*Node to target node*/ );
-
-			
-			int oldvalue = costs[myID][myIndex];
-			if(mini < myCost[myIndex]){
-			    costs[myID][myIndex] = mini;
-			}
-			else{
-			    costs[myID][myIndex] = myCost[myIndex];
-			}
-
-			if(oldvalue != costs[myID][myIndex]){
-			    costChange = true;
-			}
-		    }
+	    int minRouteNbr = myRoutings[target];
+	    int minCost = costs[myID][target];
+	    for( int nbr = 0; nbr < RouterSimulator.NUM_NODES; nbr++ ){ // One Node (not this node)
+		if(nbr == myID) 
+		    continue;
+		
+		int costToTarget = this.myNbr[nbr]/*dist to nbr*/ + this.costs[nbr][target]/*dist from nbr to target*/;
+		// check if nbr == myRoutings[target], .
+		
+		if( costToTarget < minCost || ( nbr == myRoutings[target] && costToTarget != costs[myID][target] )){
+		    minRouteNbr = nbr;
+		    minCost = costToTarget;
 		}
 	    }
+	    if( minCost <= myNbr[target] && minCost != costs[myID][target]){
+		costs[myID][target] = minCost;
+		myRoutings[target] = minRouteNbr;
+		costChange = true;
+	    }		
+		
+	    if( minCost > myNbr[target] && minCost != costs[myID][target] ){
+		costs[myID][target] = myNbr[target];
+		myRoutings[target] = target;
+		costChange = true;
+	    }
+	    
 	}
 	return costChange;
     }
@@ -71,16 +78,20 @@ public class RouterNode {
 
       System.arraycopy(pkt.mincost, 0, costs[pkt.sourceid], 0, RouterSimulator.NUM_NODES);
 
-      if(updateCosts() == true){
+      if(updateCosts()){
 	  sendAllUpdate();
       }
   }
   
     private void sendAllUpdate(){
 	// Send nodes dist-vector to neighbors.
-	for( int nodeID = 0 ; nodeID < RouterSimulator.NUM_NODES; ++nodeID ){
-	    if( myID != nodeID && myCost[nodeID] != RouterSimulator.INFINITY ){
-		RouterPacket newPkt = new RouterPacket(this.myID, nodeID, this.costs[myID]);
+	for( int recieverID = 0 ; recieverID < RouterSimulator.NUM_NODES; ++recieverID ){
+	    if( myID != recieverID && myNbr[recieverID] != RouterSimulator.INFINITY ){
+		RouterPacket newPkt = new RouterPacket(this.myID, recieverID, this.costs[myID]);
+		for( int route = 0; route < RouterSimulator.NUM_NODES; ++route){
+		    if(myRoutings[route] == recieverID)
+			newPkt.mincost[route] = RouterSimulator.INFINITY;
+		}
 		sendUpdate(newPkt);
 	    }
 	}
@@ -97,11 +108,11 @@ public class RouterNode {
   // This method should print the distance vector table (i.e. the routing table) in a format that you and 
   // your lab assistant can read and understand.
   public void printDistanceTable() {
-	  myGUI.println("Current table for " + myID +
+	  myGUI.println("\nCurrent table for " + myID +
 			"  at time " + sim.getClocktime());
 	  
 	  
-	  myGUI.println("\nDistancetable:");
+	  myGUI.println("Distancetable:");
 	  myGUI.print(String.format( "%7s %4s", "Dst", "|"));
 	  for(int xtitle = 0; xtitle < RouterSimulator.NUM_NODES; ++xtitle){
 	      myGUI.print( String.format( "%6s", xtitle ) );
@@ -109,7 +120,7 @@ public class RouterNode {
 	  myGUI.println("\n--------------------------------------------------------");
 
 	  for(int col = 0; col < RouterSimulator.NUM_NODES; col++){
-	      if( /*col == myID || */ myCost[col] == RouterSimulator.INFINITY ) continue;
+	      if( col == myID ||  myNbr[col] == RouterSimulator.INFINITY ) continue;
 	      myGUI.print( String.format( "%1s %3s %3s", "nbr" , col, "|" ) );
 	      for(int row = 0; row < RouterSimulator.NUM_NODES; row++){
 		  myGUI.print( String.format( "%6s", this.costs[col][row] ) );
@@ -117,28 +128,39 @@ public class RouterNode {
 	      myGUI.println();
 	  }
 
-	  myGUI.println("\nOur distance vector and routes:");
+	  myGUI.println("Our distance vector and routes:");
 	  myGUI.print(String.format( "%7s %4s", "Dst", "|"));
 	  for(int xtitle = 0; xtitle < RouterSimulator.NUM_NODES; ++xtitle){
 	      myGUI.print( String.format( "%6s", xtitle ) );
 	  }
 	  myGUI.println("\n--------------------------------------------------------");
 
-	  myGUI.print( String.format( "%7s %3s", "Cost", "|" ) );
+	  myGUI.print( String.format( "%7s %3s", "Dist", "|" ) );
 	  for(int row = 0; row < RouterSimulator.NUM_NODES; row++){
-	      myGUI.print( String.format( "%6s", this.myCost[row] ) );
+	      myGUI.print( String.format( "%6s", this.myNbr[row] ) );
 	  }
-
 	  myGUI.println();
-
-	 
+	   myGUI.print( String.format( "%7s %3s", "Cost", "|" ) );
+	  for(int row = 0; row < RouterSimulator.NUM_NODES; row++){
+	      myGUI.print( String.format( "%6s", this.costs[myID][row] ) );
+	  }
+	  myGUI.println();
+	  myGUI.print( String.format( "%7s %2s", "Route", "|" ) );
+	  for(int row = 0; row < RouterSimulator.NUM_NODES; row++){
+	      myGUI.print( String.format( "%6s", this.myRoutings[row] ) );
+	  }
+	  myGUI.println("\n");	 
   }
 
   // called by the simulator (executed) when the cost of link of a node is about to change
   public void updateLinkCost(int dest, int newcost) {
-      myCost[dest] = newcost;
+      myNbr[dest] = newcost;
+      costs[myID][dest] = newcost;
       costs[dest][myID] = newcost;
-      updateCosts();
+      myRoutings[dest] = dest;
+    
+      if(updateCosts())
+	  sendAllUpdate();
   }
 
 }
