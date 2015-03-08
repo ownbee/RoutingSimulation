@@ -26,7 +26,10 @@ public class RouterNode {
     System.arraycopy(costs, 0, this.costs[myID], 0, RouterSimulator.NUM_NODES);
     
     for( int i = 0; i < RouterSimulator.NUM_NODES; i++){
-	myRoutings[i] = i;
+	if(myNbr[i] == RouterSimulator.INFINITY)
+	    myRoutings[i] = RouterSimulator.INFINITY;
+	else
+	    myRoutings[i] = i;
     }
 
     sendAllUpdate();
@@ -89,7 +92,7 @@ public class RouterNode {
 	    if( myID != recieverID && myNbr[recieverID] != RouterSimulator.INFINITY ){
 		RouterPacket newPkt = new RouterPacket(this.myID, recieverID, this.costs[myID]);
 		for( int route = 0; route < RouterSimulator.NUM_NODES; ++route){
-		    if(myRoutings[route] == recieverID)
+		    if(myRoutings[route] == recieverID && route == recieverID)
 			newPkt.mincost[route] = RouterSimulator.INFINITY;
 		}
 		sendUpdate(newPkt);
